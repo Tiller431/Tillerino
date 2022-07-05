@@ -7,13 +7,13 @@ topplay INTEGER,
 average_pp INTEGER
 );
 
--- Create beatmaps (beatmapid, beatmap_setid, difficulty_name, stars, length, pp90, pp95, pp96, pp97, pp98, pp99, pp995, pp100)
+-- Create beatmaps (beatmapid, beatmap_setid, difficulty_name, stars, mods, pp90, pp95, pp96, pp97, pp98, pp99, pp995, pp100)
 CREATE TABLE beatmaps (
 beatmapid INTEGER PRIMARY KEY,
 beatmap_setid INTEGER,
 difficulty_name TEXT,
 stars FLOAT,
-length FLOAT,
+mods TEXT,
 pp90 FLOAT,
 pp95 FLOAT,
 pp96 FLOAT,
