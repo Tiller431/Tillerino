@@ -81,3 +81,18 @@ def getBeatmapSet(beatmapSetID):
     response = requests.get(url)
     response = response.json()
     return response
+
+def getBeatmapSetID(beatmapID):
+    beatmapID = str(beatmapID)
+    url = "https://osu.ppy.sh/api/get_beatmaps?k=" + apiKey + "&b=" + beatmapID
+    response = requests.get(url)
+    response = response.json()
+    return response[0]["beatmapset_id"]
+
+def getBeatmapLeaderboard(beatmapID, limit=50):
+    beatmapID = str(beatmapID)
+    limit = str(limit)
+    url = "https://osu.ppy.sh/api/get_scores?k=" + apiKey + "&b=" + beatmapID + "&limit=" + limit
+    response = requests.get(url)
+    response = response.json()
+    return response

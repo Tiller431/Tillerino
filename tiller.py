@@ -7,6 +7,7 @@ from beatmaps import mods
 from beatmaps import mods
 from api import osu
 from db import db
+from beatmaps import ow
 load_dotenv()
 
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
@@ -36,16 +37,6 @@ async def on_message(message):
         msg += "!rs <username/userid> - Displays the user's recent score\n"
         await message.channel.send(msg)
         return
-
-    if message.content.startswith("!calc"):
-        try:
-            beatmapID = int(message.content.split(" ")[1])
-        except:
-            await message.channel.send("Please enter a valid beatmap ID\nUsage: !calc <beatmapid>")
-            return
-        pp = calc.calcPP(beatmapID)
-        await message.channel.send(pp)
-        return
     
     if message.content.startswith(">rs"):
         try:
@@ -71,7 +62,7 @@ async def on_message(message):
         #db.getUserTop(userID, 1) example: {"beatmap_id":"987654","score":"1234567","maxcombo":"421","count50":"10","count100":"50","count300":"300","countmiss":"1","countkatu":"10","countgeki":"50","perfect":"0","enabled_mods":"76","user_id":"1","date":"2013-06-22 9:11:16","rank":"SH"}
         mapstats = osu.getBeatmap(recentScore["beatmap_id"])
 
-        db.updateUser(userID)
+
         
         if recentScore is None:
             print(recentScore)
@@ -103,7 +94,10 @@ async def on_message(message):
         embed.set_thumbnail(url="https://b.ppy.sh/thumb/{}l.jpg".format(mapstats["beatmapset_id"]))
         embed.set_footer(text="score set at {}".format(recent["date"]))
         await message.channel.send("**{}'s Recent Score**".format(osu.getUsername(userID)), embed=embed)
-        calc.calcAll(int(recentScore["beatmapset_id"]))
+
+        calc.calcAll(osu.getBeatmap(int(recentScore["beatmap_id"]))["beatmapset_id"])
+        db.updateUser(userID)
+        
         return
 
     if message.content.startswith("!osuset"):
@@ -121,6 +115,39 @@ async def on_message(message):
             db.createUser(message.author.id, username)
         
         await message.channel.send("{} is now set to {}".format(message.author.mention, username))
+
+    if message.content.startswith("!calcowlb"):
+        try:
+            beatmapID = message.content.split(" ")[1]
+        except:
+            await message.channel.send("Please enter a valid beatmap ID")
+            return
+        beatmap = osu.getBeatmap(beatmapID)
+        if beatmap is None:
+            await message.channel.send("Beatmap not found")
+            return
+        ow.calcOWFromLB(beatmapID)
+        await message.channel.send("Calculated all players on {} leaderboard!".format(beatmap["title"]))
+
+    if message.content.startswith("!r"):
+        userid = db.getUIDfromDID(message.author.id)
+        if userid is None:
+            await message.channel.send("You are not registered. Please use !osuset <username> to register.")
+            return
+
+        #get random beatmap
+        beatmap = db.getRandomOWmap(userid)
+        if beatmap is None:
+            await message.channel.send("Not enough maps in the database. \nPlease use !calcowlb <beatmapID> to calculate a leaderboard to load more maps into the DB.")
+            return
+        beatmap = osu.getBeatmap(beatmap)
+        
+        #create embed
+        embed = discord.Embed(description="**{}**".format(beatmap["title"]), title="{} [{}]".format(beatmap["artist"], beatmap["version"]), url="https://osu.ppy.sh/b/{}".format(beatmap["beatmap_id"]), colour=color)
+        embed.set_thumbnail(url="https://b.ppy.sh/thumb/{}l.jpg".format(beatmap["beatmapset_id"]))
+
+        await message.channel.send("**{}'s Farm Map**".format(osu.getUsername(userid)), embed=embed)
+
 
 
     

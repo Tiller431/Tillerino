@@ -1,14 +1,16 @@
 import mysql.connector
 import os
 from api import osu
+import random
+
+db = mysql.connector.connect(
+    host="localhost",
+    user="osu",
+    passwd="osu",
+    database="osu"
+)
 
 def query(sql, *args):
-    db = mysql.connector.connect(
-        host="localhost",
-        user="osu",
-        passwd="osu",
-        database="osu"
-    )
     cursor = db.cursor(buffered=True)
     try:
         print("Query: {}\nArgs:{}".format(sql, args))
@@ -17,54 +19,38 @@ def query(sql, *args):
     except mysql.connector.Error as err:
         print("Error: {}".format(err.msg))
         db.rollback()
-    db.close()
+
 
 
 def queryOne(sql, *args):
-    db = mysql.connector.connect(
-        host="localhost",
-        user="osu",
-        passwd="osu",
-        database="osu"
-    )
     cursor = db.cursor(buffered=True)
     try:
         print("Query: {}\nArgs:{}".format(sql, args))
         cursor.execute(sql, args)
         result = cursor.fetchone()
+        print("Result: {}".format(result))
     except mysql.connector.Error as err:
         print("Error: {}".format(err))
         result = None
     db.commit()
-    db.close()
+
     return result
 
 def queryAll(sql, *args):
-    db = mysql.connector.connect(
-        host="localhost",
-        user="osu",
-        passwd="osu",
-        database="osu"
-    )
     cursor = db.cursor(buffered=True)
     try:
         print("Query: {}\nArgs:{}".format(sql, args))
         cursor.execute(sql, args)
         result = cursor.fetchall()
+        print("Result: {}".format(result))
     except mysql.connector.Error as e:
         print("Error: {}".format(e))
         result = None
     db.commit()
-    db.close()
+
     return result
 
 def queryMultiLn(sql, *args):
-    db = mysql.connector.connect(
-        host="localhost",
-        user="osu",
-        passwd="osu",
-        database="osu"
-    )
     cursor = db.cursor(buffered=True)
     try:
         print("Query: {}\nArgs:{}".format(sql, args))
@@ -73,12 +59,17 @@ def queryMultiLn(sql, *args):
     except mysql.connector.Error as err:
         print("Error: {}".format(err.msg))
         db.rollback()
-    db.close()
+
     
 def initDB():
     sql = "CREATE TABLE IF NOT EXISTS users( userid INTEGER PRIMARY KEY, discordid BIGINT, username TEXT, current_pp FLOAT, topplay FLOAT, average_pp FLOAT);"
     query(sql)
     sql = "CREATE TABLE IF NOT EXISTS beatmaps( id INTEGER AUTO_INCREMENT, beatmapid INTEGER, beatmap_setid INTEGER, difficulty_name TEXT, stars REAL, mods TEXT, pp90 REAL, pp95 REAL, pp96 REAL, pp97 REAL, pp98 REAL, pp99 REAL, pp995 REAL, pp100 REAL, PRIMARY KEY (id));"
+    query(sql)
+    #overweighted tables (beatmapid, beatmap_setid, topplays, average_pp, overweight_score)
+    sql = "CREATE TABLE IF NOT EXISTS overweighted( beatmapid INTEGER, beatmap_setid INTEGER, topplays INTEGER, average_pp REAL, overweight_score REAL, PRIMARY KEY (beatmapid));"
+    #scores table (beatmapid, beatmap_setid, userid, scoreid, mods, pp, overwight_rank)
+    sql = "CREATE TABLE IF NOT EXISTS scores( beatmapid INTEGER, beatmap_setid INTEGER, userid INTEGER, scoreid BIGINT, mods TEXT, pp FLOAT, overweight_rank INTEGER, PRIMARY KEY (scoreid));"
     query(sql)
 
 def getBeatmap(beatmapID):
@@ -133,3 +124,80 @@ def isMapInDB(beatmapID, mods):
     else:
         return True
 
+def getOWmap(beatmapID):
+    sql = "SELECT * FROM overweighted WHERE beatmapid = %s"
+    result = queryOne(sql, beatmapID)
+    return result
+
+def isMapOW(beatmapid):
+    sql = "SELECT * FROM overweighted WHERE beatmapid = %s"
+    result = queryOne(sql, beatmapid)
+    if result is None:
+        return False
+    else:
+        return True
+
+def updateOWscore(beatmapID):
+    sql = "SELECT * FROM scores WHERE beatmapid = %s"
+    result = queryAll(sql, beatmapID)
+    if result is None:
+        return False
+    else:
+        owVal = 0
+        totalPP = 0
+        numScores = len(result)
+        for score in result:
+            owVal += score[6]
+            totalPP += score[5]
+        if owVal > 0:
+            owVal = owVal / numScores
+        if totalPP > 0:
+            totalPP = totalPP / numScores
+        sql = "UPDATE overweighted SET overweight_score = %s, average_pp = %s, topplays = %s WHERE beatmapid = %s"
+        query(sql, owVal, totalPP, numScores, int(beatmapID))
+        return False
+
+def getOWscore(scoreID):
+    sql = "SELECT * FROM scores WHERE scoreid = %s"
+    result = queryOne(sql, scoreID)
+    if result is None:
+        return False
+    else:
+        return result["overweight_rank"]
+
+def saveOWmap(beatmapID):
+    mapstats = osu.getBeatmap(beatmapID)
+    sql = "INSERT INTO overweighted (beatmapid, beatmap_setid, topplays, average_pp, overweight_score) VALUES (%s, %s, 0, 0, 0);"
+    query(sql, beatmapID, int(mapstats["beatmapset_id"]))
+
+def saveScore(beatmapID, userID, scoreID, mods, pp, owRank):
+    sql = "INSERT INTO scores (beatmapid, beatmap_setid, userid, scoreid, mods, pp, overweight_rank) VALUES (%s, %s, %s, %s, %s, %s, %s);"
+    query(sql, beatmapID, int(osu.getBeatmap(beatmapID)["beatmapset_id"]), userID, scoreID, mods, pp, owRank)
+
+def isScoreOW(scoreID):
+    sql = "SELECT * FROM scores WHERE scoreid = %s"
+    result = queryOne(sql, scoreID)
+    if result is None:
+        return False
+    else:
+        return True
+
+def getRandomOWmap(userID):
+    #randomly select a map from the database
+    lower, upper = getUserPPrange(userID)
+    #overweight_score is < 5
+    sql = "SELECT * FROM overweighted WHERE overweight_score < 5 AND average_pp BETWEEN %s AND %s"
+    result = queryAll(sql, lower, upper)
+    if result is None:
+        return False
+    else:
+        print(result[random.randint(0, len(result)-1)][0])
+        return result[random.randint(0, len(result)-1)][0]
+
+def getUserPPrange(userID):
+    sql = "SELECT * FROM users WHERE userid = %s"
+    result = queryOne(sql, userID)
+    if result is None:
+        return False
+    else:
+        return result[5] - 50, result[5] + 50

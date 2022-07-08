@@ -95,5 +95,6 @@ def calcPlay(mapID, mods, end=0, combo=0, acc=100, one=0, fif=0, misses=0):
 
 def calcAll(beatmapsetid):
     beatmaps = osu.getBeatmapSet(beatmapsetid)
+    print(beatmaps)
     for beatmap in beatmaps:
         calcPP(beatmap["beatmap_id"])

@@ -8,7 +8,7 @@ services:
       MYSQL_DATABASE: osu
       MYSQL_ROOT_PASSWORD: osu
     ports:
-      - "3306:3306"
+      - "0.0.0.0:3306:3306"
     volumes:
       - dbdata:/var/lib/mysql
   phpmyadmin:
@@ -24,6 +24,6 @@ services:
       PMA_ARBITRARY: 1
     restart: always
     ports:
-      - 8081:80
+      - 0.0.0.0:8081:80
 volumes:
   dbdata:
