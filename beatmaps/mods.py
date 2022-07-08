@@ -1,3 +1,4 @@
+
 class mods:
     NOMOD       = 0
     NOFAIL      = 1
@@ -54,3 +55,26 @@ def readableMods(m):
 	if m & mods.TOUCHSCREEN > 0:
 		r += "TD"
 	return r
+
+def modsToEnum(r):
+    m = 0
+    r = r.upper()
+    if r.find("NF") > -1:
+        m += mods.NOFAIL
+    if r.find("EZ") > -1:
+        m += mods.EASY
+    if r.find("HD") > -1:
+        m += mods.HIDDEN
+    if r.find("HR") > -1:
+        m += mods.HARDROCK
+    if r.find("DT") > -1:
+        m += mods.DOUBLETIME
+    if r.find("HT") > -1:
+        m += mods.HALFTIME
+    if r.find("FL") > -1:
+        m += mods.FLASHLIGHT
+    if r.find("SO") > -1:
+        m += mods.SPUNOUT
+    if r.find("TD") > -1:
+        m += mods.TOUCHSCREEN
+    return m

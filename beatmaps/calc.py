@@ -2,6 +2,8 @@ import os
 import json
 from api import osu
 from db import db
+from logger import log
+
 oppaiPath = "oppai"
 cachePath = "cache/osu/"
 calcMods = []
@@ -38,8 +40,10 @@ def calcPP(beatmapid):
         for acc in calcAcc:
             if mods != "NOMOD":
                 #run "oppai pathtoosu -ojson acc%" and get the json
+                log.debug("Calculating PP for {} with {}% accuracy and {} mods".format(beatmapid, acc, mods))
                 output = os.popen("oppai " + cachePath + beatmapid + ".osu" + " -ojson " + acc + "% " + "+" + mods).read()
             else:
+                log.debug("Calculating PP for {} with {}% accuracy and no mods".format(beatmapid, acc))
                 output = os.popen("oppai " + cachePath + beatmapid + ".osu" + " -ojson " + acc + "%").read()
 
             #parse the json
@@ -61,12 +65,15 @@ def calcUserTop(userid, limit=25):
     if userPlays is None:
         return None
     
+    log.debug("Calculating top plays  for {}".format(userid))
+
     for play in userPlays:
         # example: {"beatmap_id":"987654","score":"1234567","maxcombo":"421","count50":"10","count100":"50","count300":"300","countmiss":"1","countkatu":"10","countgeki":"50","perfect":"0","enabled_mods":"76","user_id":"1","date":"2013-06-22 9:11:16","rank":"SH"}
         beatmapid = play["beatmap_id"]
         calcPP(beatmapid)
 
 def calcACC(num300, num100, num50, nummiss):
+    log.debug("Calculating accuracy for {} 300s, {} 100s, {} 50s, {} misses".format(num300, num100, num50, nummiss))
     prec = ((num300 * 300) + (num100 * 100) + (num50 * 50)) / ((num300 + num100 + num50 + nummiss) * 300)
     prec = prec * 100
     return round(prec, 2)
@@ -89,12 +96,12 @@ def calcPlay(mapID, mods, end=0, combo=0, acc=100, one=0, fif=0, misses=0):
         cmd += " -end{}".format(end)
     if combo > 0:
         cmd += " {}x".format(combo)
-    print(cmd)
+    log.debug("Calculating PP for {} with {}% accuracy and {} mods".format(mapID, acc, mods))
     output = json.loads(os.popen(cmd).read())
     return int(output["pp"])
 
 def calcAll(beatmapsetid):
     beatmaps = osu.getBeatmapSet(beatmapsetid)
-    print(beatmaps)
+    log.debug("Calculating PP for all maps in beatmapset: {}".format(beatmapsetid))
     for beatmap in beatmaps:
         calcPP(beatmap["beatmap_id"])

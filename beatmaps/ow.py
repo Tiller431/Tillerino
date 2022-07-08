@@ -1,6 +1,6 @@
 from db import db
 from api import osu
-
+from logger import log
 
 def calcOwTPs(userid, limit=5):
     userPlays = osu.getUserTop(userid, limit=limit)
@@ -21,7 +21,9 @@ def calcOwTPs(userid, limit=5):
         ow += 1
 
 def calcOWFromLB(beatmapid):
-    scores = osu.getBeatmapLeaderboard(beatmapid, limit=50)
+    scores = osu.getBeatmapLeaderboard(beatmapid, limit=10)
+    log.debug("Calculating OW for {}".format(beatmapid))
+    log.debug("# of scores: {}".format(len(scores)))
     for score in scores:
         calcOwTPs(score["user_id"])
 
