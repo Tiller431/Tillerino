@@ -1,9 +1,11 @@
+from http.client import ResponseNotReady
 from linecache import cache
 import requests
 import json
 import os
 from dotenv import load_dotenv
 from logger import log
+from beatmaps import mods as m
 
 load_dotenv()
 cachePath = "cache/osu/"
@@ -41,7 +43,13 @@ def getUserRecent(userID, limit):
     log.debug("Getting user recent plays from osu!api with userid: " + userID)
     response = requests.get(url)
     response = response.json()
-    return response
+    try:
+        if limit == "1":
+            response = response[0]
+            return response
+        return response
+    except IndexError:
+        return None
 
 def getOsu(beatmapID):
     #cache/osu/beatmapID.osu
@@ -62,7 +70,10 @@ def getUserID(username):
     log.debug("Getting userid from osu!api with username: " + username)
     response = requests.get(url)
     response = response.json()
-    return int(response[0]["user_id"])
+    try:
+        return int(response[0]["user_id"])
+    except IndexError:
+        return None
 
 def getUsername(userID):
     userID = str(userID)
@@ -82,6 +93,9 @@ def getAveragePPTOP(userID, limit):
     pp = 0
     for i in response:
         pp += float(i["pp"])
+
+    if pp == 0:
+        return 0
     return pp / len(response)
 
 def getBeatmapSet(beatmapSetID):
@@ -107,4 +121,61 @@ def getBeatmapLeaderboard(beatmapID, limit=50):
     log.debug("Getting beatmap leaderboard from osu!api with beatmapid: " + beatmapID)
     response = requests.get(url)
     response = response.json()
+    log.debug(url)
     return response
+
+def getScore(scoreID):
+    scoreID = str(scoreID)
+    url = "https://osu.ppy.sh/api/get_scores?k=" + apiKey + "&s=" + scoreID
+    log.debug("Getting score from osu!api with scoreid: " + scoreID)
+    response = requests.get(url)
+    response = response.json()
+    return response
+
+def getUserMods(userID):
+    userID = str(userID)
+    userScores = getUserTop(userID, 50)
+    #get average used mods
+    hd = 0.0001
+    hr = 0.0001
+    dt = 0.0001
+    log.debug("Getting average mods used by user from osu!api with userid: " + userID)
+    for i in userScores:
+        i["enabled_mods"] = int(i["enabled_mods"])
+        if i["enabled_mods"] & m.mods.DOUBLETIME > 0:
+            dt += 1
+
+        if i["enabled_mods"] & m.mods.HARDROCK > 0:
+            hr += 1
+
+        if i["enabled_mods"] & m.mods.HIDDEN > 0:
+            hd += 1
+
+    if (dt / len(userScores) > 0.3) & (hd / len(userScores) > 0.3):
+        log.debug("User uses double time and hidden")
+        return m.mods.DOUBLETIME + m.mods.HIDDEN
+
+    if (hr / len(userScores) > 0.3) & (hd / len(userScores) > 0.3):
+        log.debug("User uses hardrock and hidden")
+        return m.mods.HARDROCK + m.mods.HIDDEN
+
+    if (dt / len(userScores) > 0.3):
+        log.debug("User uses double time")
+        return m.mods.DOUBLETIME
+
+    if (hr / len(userScores) > 0.3):
+        log.debug("User uses hardrock")
+        return m.mods.HARDROCK
+
+    if (hd / len(userScores) > 0.3):
+        log.debug("User uses hidden")
+        return m.mods.HIDDEN
+
+    return m.mods.NOMOD
+
+def doesUserTopExist(userID, beatmapID):
+    userID = str(userID)
+    limit = str(limit)
+    url = "https://osu.ppy.sh/api/get_user_best?k=" + apiKey + "&u=" + userID + "&limit=1"
+    log.debug("Getting user top plays from osu!api with userid: " + userID)
+

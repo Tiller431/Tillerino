@@ -51,7 +51,7 @@ def calcPP(beatmapid):
             #get the pp
             pp = round(output["pp"], 2)
             #print the pp
-            print(beatmapid + " " + acc + "% +" + mods + ": " + str(pp))
+            log.debug(beatmapid + " " + acc + "% +" + mods + ": " + str(pp))
             final.append(pp)
         #save the pp to the database
         formatted = "+**{}**: **90%**:{} **95%**:{} **96%**:{} **97%**:{} **98%**:{} **99%**:{} **99.5%**:{} **100%**:{}\n".format(mods, final[1], final[2], final[3], final[4], final[5], final[6], final[7], final[8])

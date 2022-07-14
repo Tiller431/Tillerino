@@ -3,12 +3,12 @@ import os
 import time
 from dotenv import load_dotenv
 from beatmaps import calc
-from beatmaps import mods
-from beatmaps import mods
+from beatmaps import mods as m
 from api import osu
 from db import db
 from beatmaps import ow
 from logger import log
+import threading
 
 load_dotenv()
 
@@ -60,7 +60,7 @@ async def on_message(message):
         #if user is None:
             #await message.channel.send("User not found")
             #return
-        recentScore = osu.getUserRecent(userID, 1)[0]
+        recentScore = osu.getUserRecent(userID, 1)
         if recentScore is None:
             await message.channel.send("{} has no recent score".format(osu.getUsername(userID)))
             return
@@ -79,7 +79,7 @@ async def on_message(message):
 
         
         recent["acc"] = calc.calcACC(int(recent["count300"]), int(recent["count100"]), int(recent["count50"]), int(recent["countmiss"]))
-        recent["realmods"] = mods.readableMods(int(recent["enabled_mods"]))
+        recent["realmods"] = m.readableMods(int(recent["enabled_mods"]))
         recent["notes_hit"] = int(recent["countmiss"]) + int(recent["count50"]) + int(recent["count100"]) + int(recent["count300"])
         recent["pp"] = calc.calcPlay(int(recent["beatmap_id"]), recent["realmods"], int(recent["notes_hit"]), int(recent["maxcombo"]), acc=recent["acc"], one=int(recent["count100"]), fif=int(recent["count50"]), misses=int(recent["countmiss"]))
         recent["pp_iffc"] = calc.calcPlay(int(recent["beatmap_id"]), recent["realmods"], 0, 0, acc=recent["acc"], one=int(recent["count100"]), fif=int(recent["count50"]), misses=0)
@@ -101,7 +101,7 @@ async def on_message(message):
         log.debug("Sending recent score embed")
         await message.channel.send("**{}'s Recent Score**".format(osu.getUsername(userID)), embed=embed)
 
-        calc.calcAll(osu.getBeatmap(int(recentScore["beatmap_id"]))["beatmapset_id"])
+        #calc.calcAll(osu.getBeatmap(int(recentScore["beatmap_id"]))["beatmapset_id"])
         db.updateUser(userID)
         
         return
@@ -138,10 +138,11 @@ async def on_message(message):
             await message.channel.send("User has no recent scores")
             return
         recent = recentScore
+        #calcOwFromLB thread
+        thread = threading.Thread(target=ow.calcOWFromLB, args=(mapstats["beatmap_id"],)).start()
 
-        ow.calcOWFromLB(recent["beatmap_id"])
         db.updateUser(userID)
-        
+        log.debug("Done calculating all top plays for all players on the LB")
         return
 
 
@@ -157,8 +158,11 @@ async def on_message(message):
             log.debug("'{}' osu! username is invalid".format(username))
             await message.channel.send("Username not found")
             return
-        if db.getUser(userID) is None:
+        if db.getUser(message.author.id) is None:
             db.createUser(message.author.id, username)
+        else:
+            db.changeUsername(message.author.id, username)
+        db.updateUser(userID)
         
         await message.channel.send("{} is now set to {}".format(message.author.mention, username))
 
@@ -173,7 +177,7 @@ async def on_message(message):
         if beatmap is None:
             await message.channel.send("Beatmap not found")
             return
-        ow.calcOWFromLB(beatmapID)
+        thread = threading.Thread(target=ow.calcOWFromLB, args=(beatmap["beatmapset_id"],))
         await message.channel.send("Calculated all players on {} leaderboard!".format(beatmap["title"]))
 
     if message.content.startswith("!r"):
@@ -184,7 +188,7 @@ async def on_message(message):
             return
 
         #get random beatmap
-        beatmap = db.getRandomOWmap(userid)
+        beatmap, mods, numOfBM = db.getRandomOWmap(userid)
         if beatmap is None:
             log.error("No maps found for user {}".format(userid))
             await message.channel.send("Not enough maps in the database. \nPlease use !calcowlb <beatmapID> to calculate a leaderboard to load more maps into the DB.")
@@ -193,12 +197,26 @@ async def on_message(message):
         
         #create embed
         description = ""
-        description += "▸ {}★ ▸ {} bpm ▸ {}:{} ▸ {}\n".format(beatmap["difficultyrating"], beatmap["bpm"], beatmap["hit_length"], beatmap["version"], beatmap["title"])
+        description += "▸ {}★ ▸ {} bpm ▸ {} ▸ +{}\n".format(round(float(beatmap["difficultyrating"]), 2), round(float(beatmap["bpm"]) * 1.5) if mods & m.mods.DOUBLETIME > 0 else beatmap["bpm"], time.strftime("%M:%S", time.gmtime(int(beatmap["hit_length"]))), m.readableMods(int(mods)))
+        #calc pp
+        ppStats = db.getPP(beatmap["beatmap_id"], mods)
         #add pp stats (95% FC, 98% FC, 100% FC)
+        #ppstats = ppStats[1], ppStats[4], ppStats[7]
+        log.debug("ppstats: {}".format(ppStats))
+        description += "▸ 95% > {}pp ▸ 98% > {}pp ▸ 100% > {}pp\n".format(round(float(ppStats[1]), 2), round(float(ppStats[4]), 2), round(float(ppStats[7]), 2))
+
         embed = discord.Embed(description=description, title="{} - {} [{}]".format(beatmap["artist"], beatmap["title"], beatmap["version"]), url="https://osu.ppy.sh/b/{}".format(beatmap["beatmap_id"]), colour=color)
         embed.set_thumbnail(url="https://b.ppy.sh/thumb/{}l.jpg".format(beatmap["beatmapset_id"]))
-        log.debug("Sending random farm map embed")
-        await message.channel.send("**{}'s Farm Map**".format(osu.getUsername(userid)), embed=embed)
+        log.debug("Sending random farm map embed and osu!direct link")
+        threading.Thread(target=ow.calcOWFromLB, args=(beatmap["beatmap_id"],)).start()
+        await message.channel.send("**{}'s Farm Map** (out of {} qualifying maps)".format(osu.getUsername(userid), numOfBM), embed=embed)
+        #send osu!direct link
+        await message.channel.send("osu!direct link: <osu://b/{}>".format(beatmap["beatmap_id"]))
+        return
+
+        
+        
+        
 
 
 
