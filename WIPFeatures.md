@@ -7,7 +7,7 @@
 
 
 ## !r
-- [ ] `!r <mods>`
+- [X] `!r <mods>`
 - [X] Make `!r` recommend maps with mods you use
 - [ ] Have `!r` not send the same map within a few hours
 - [ ] Reccommend maps that are not older than 4 years
