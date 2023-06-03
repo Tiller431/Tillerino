@@ -7,10 +7,12 @@ services:
     environment:
       MYSQL_DATABASE: osu
       MYSQL_ROOT_PASSWORD: osu
+      MYSQL_USER: osu
+      MYSQL_PASSWORD: osu
     ports:
       - "0.0.0.0:3306:3306"
     volumes:
-      - dbdata:/var/lib/mysql
+      - ./dbdata:/var/lib/mysql
   phpmyadmin:
     image: phpmyadmin/phpmyadmin
     container_name: pma
@@ -18,12 +20,10 @@ services:
       - db
     environment:
       PMA_HOST: db
-      PMA_USER: osu
+      PMA_USER: root
       PMA_PASSWORD: osu
       PMA_PORT: 3306
       PMA_ARBITRARY: 1
     restart: always
     ports:
       - 0.0.0.0:8081:80
-volumes:
-  dbdata:
