@@ -1,24 +1,33 @@
-import discord
-import os
-import time
 from dotenv import load_dotenv
 from beatmaps import calc
 from beatmaps import mods as m
+from math import acos
 from api import osu
 from db import db
+from db import settings as set
 from beatmaps import ow
 from logger import log
+from beatmaps import maptypes as mt
 import threading
-
+import discord
+import os
+import time
 load_dotenv()
+WYSI = []
+WYSI.append("727")
+WYSI.append("7.27")
+WYSI.append("72.7")
+WYSI.append("7:27")
+
 
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
 color = 0xff00e0
 bot = discord.Client()
-botStatus = "osu! | !help"
+botStatus = "osu! | V0.9.1"
 
 @bot.event
 async def on_ready():
+    print(calc.calcPP(2137200, m.modsToEnum("HD")))
     log.debug("Initilizing DB")
     db.initDB()
 
@@ -28,7 +37,39 @@ async def on_ready():
     await bot.change_presence(activity=discord.Game(name=botStatus))
 
 @bot.event
+async def on_message_edit(message1, message2):
+    #WYSI checker
+    #get text from embed
+    for wysi in WYSI:
+        try:
+            embed = str(message2.embeds[0].to_dict())
+        except:
+            continue
+        if wysi in embed:
+            await message2.channel.send("https://c.tenor.com/QqSkd-o9L8sAAAAS/aireu-wysi.gif")
+            return
+    for wysi in WYSI:
+        if wysi in message2.content:
+            await message2.channel.send("https://c.tenor.com/QqSkd-o9L8sAAAAS/aireu-wysi.gif")
+            return
+
+@bot.event
 async def on_message(message):
+    
+    #WYSI checker
+    #get text from embed
+    for wysi in WYSI:
+        try:
+            embed = str(message.embeds[0].to_dict())
+        except:
+            continue
+        if wysi in embed:
+            await message.channel.send("https://c.tenor.com/QqSkd-o9L8sAAAAS/aireu-wysi.gif")
+            return
+    for wysi in WYSI:
+        if wysi in message.content:
+            await message.channel.send("https://c.tenor.com/QqSkd-o9L8sAAAAS/aireu-wysi.gif")
+            return
 
     if message.author == bot.user:
         return
@@ -40,7 +81,7 @@ async def on_message(message):
         msg += "!calc <beatmapid> - Calculates PP for the beatmap\n"
         msg += "!rs <username/userid> - Displays the user's recent score\n"
         await message.channel.send(msg)
-        return
+        return        
     
     if message.content.startswith("!rs"):
         log.info("{} sent !rs".format(message.author))
@@ -117,17 +158,17 @@ async def on_message(message):
                 userID = db.getUIDfromDID(message.author.id)
                 if userID == None:
                     await message.channel.send("Please set your osu! username with !osuset <username> to help find maps for future recommendations")
-                    return
+                    
 
             
         #user = db.getUser(userID)
         #if user is None:
             #await message.channel.send("User not found")
             #return
-        recentScore = osu.getUserRecent(userID, 1)[0]
+        recentScore = osu.getUserRecent(userID, 1)
         if recentScore is None:
-            await message.channel.send("{} has no recent score".format(osu.getUsername(userID)))
             return
+            
         #db.getUserTop(userID, 1) example: {"beatmap_id":"987654","score":"1234567","maxcombo":"421","count50":"10","count100":"50","count300":"300","countmiss":"1","countkatu":"10","countgeki":"50","perfect":"0","enabled_mods":"76","user_id":"1","date":"2013-06-22 9:11:16","rank":"SH"}
         mapstats = osu.getBeatmap(recentScore["beatmap_id"])
 
@@ -136,14 +177,14 @@ async def on_message(message):
         if recentScore is None:
             print(recentScore)
             await message.channel.send("User has no recent scores")
-            return
+            
         recent = recentScore
         #calcOwFromLB thread
         thread = threading.Thread(target=ow.calcOWFromLB, args=(mapstats["beatmap_id"],)).start()
 
         db.updateUser(userID)
         log.debug("Done calculating all top plays for all players on the LB")
-        return
+        
 
 
     if message.content.startswith("!osuset"):
@@ -177,24 +218,64 @@ async def on_message(message):
         if beatmap is None:
             await message.channel.send("Beatmap not found")
             return
-        thread = threading.Thread(target=ow.calcOWFromLB, args=(beatmap["beatmapset_id"],))
+        thread = threading.Thread(target=ow.calcOWFromLB, args=(beatmapID,))
+        thread.start()
         await message.channel.send("Calculated all players on {} leaderboard!".format(beatmap["title"]))
 
     if message.content.startswith("!r"):
+        speed = False
+        aim = False
+        usermods = None
         log.info("{} sent !r. Getting an overweighted map.".format(message.author))
         userid = db.getUIDfromDID(message.author.id)
         if userid is None:
             await message.channel.send("You are not registered. Please use !osuset <username> to register.")
             return
 
-        #get random beatmap
-        beatmap, mods, numOfBM = db.getRandomOWmap(userid)
-        if beatmap is None:
-            log.error("No maps found for user {}".format(userid))
-            await message.channel.send("Not enough maps in the database. \nPlease use !calcowlb <beatmapID> to calculate a leaderboard to load more maps into the DB.")
-            return
-        beatmap = osu.getBeatmap(beatmap)
+        if len(message.content) > 3:
+            #get mods and type
+            try:
+                types = message.content.split(" ")[1]
+                if types == "speed":
+                    speed = True
+                elif types == "aim":
+                    aim = True
+                else:
+                    await message.channel.send("Please enter a valid type !r (speed/aim) (mods)")
+                    return
+                
+                usermods = m.modsToEnum(message.content.split(" ")[2])
+
+            except:
+                pass
+
         
+        beatmapID, mods, numOfBM = db.getRandomOWmap(userid, mods=usermods)
+        #print(beatmapID, mods, numOfBM)
+
+        if speed and aim:
+            await message.channel.send("Please only choose one mod type: speed or aim")
+            return
+        
+        if speed:
+            if beatmapID is None:
+                log.error("No maps found for user {}".format(userid))
+                await message.channel.send("Not enough maps in the database. \nPlease use !calcowlb <beatmapID> to calculate a leaderboard to load more maps into the DB.")
+                return
+            while mt.isSpeed(beatmapID) == False:
+                beatmapID, mods, numOfBM = db.getRandomOWmap(userid, mods=usermods)
+                print(beatmapID, mods, numOfBM)
+        elif aim:
+            if beatmapID is None:
+                log.error("No maps found for user {}".format(userid))
+                await message.channel.send("Not enough maps in the database. \nPlease use !calcowlb <beatmapID> to calculate a leaderboard to load more maps into the DB.")
+                return
+            while mt.isAim(beatmapID) == False:
+                beatmapID, mods, numOfBM = db.getRandomOWmap(userid, mods=usermods)
+                print(beatmapID, mods, numOfBM)
+        
+        beatmap = osu.getBeatmap(beatmapID)
+        ppjson = calc.calcPP(beatmapID, mods)
         #create embed
         description = ""
         description += "▸ {}★ ▸ {} bpm ▸ {} ▸ +{}\n".format(round(float(beatmap["difficultyrating"]), 2), round(float(beatmap["bpm"]) * 1.5) if mods & m.mods.DOUBLETIME > 0 else beatmap["bpm"], time.strftime("%M:%S", time.gmtime(int(beatmap["hit_length"]))), m.readableMods(int(mods)))
@@ -204,15 +285,33 @@ async def on_message(message):
         #ppstats = ppStats[1], ppStats[4], ppStats[7]
         log.debug("ppstats: {}".format(ppStats))
         description += "▸ 95% > {}pp ▸ 98% > {}pp ▸ 100% > {}pp\n".format(round(float(ppStats[1]), 2), round(float(ppStats[4]), 2), round(float(ppStats[7]), 2))
+        description += "AimPP: {}pp ▸ SpeedPP: {}pp ▸ AccPP: {}pp".format(round(ppjson["aim_pp"], 2), round(ppjson["speed_pp"], 2), round(ppjson["acc_pp"], 2))
 
         embed = discord.Embed(description=description, title="{} - {} [{}]".format(beatmap["artist"], beatmap["title"], beatmap["version"]), url="https://osu.ppy.sh/b/{}".format(beatmap["beatmap_id"]), colour=color)
         embed.set_thumbnail(url="https://b.ppy.sh/thumb/{}l.jpg".format(beatmap["beatmapset_id"]))
         log.debug("Sending random farm map embed and osu!direct link")
         threading.Thread(target=ow.calcOWFromLB, args=(beatmap["beatmap_id"],)).start()
-        await message.channel.send("**{}'s Farm Map** (out of {} qualifying maps)".format(osu.getUsername(userid), numOfBM), embed=embed)
-        #send osu!direct link
-        await message.channel.send("osu!direct link: <osu://b/{}>".format(beatmap["beatmap_id"]))
+        await message.channel.send("**{}'s Farm Map**\nosu!direct link: <osu://b/{}>".format(osu.getUsername(userid), beatmap["beatmap_id"]), embed=embed)
         return
+
+    if message.content.startswith("!settings"):
+        try:
+            setting = message.content.split(" ")[1]
+            value = message.content.split(" ")[2]
+        except:
+            await message.channel.send('Please enter a valid setting and value. Example: !settings maptype speed\nAvailable settings:\n"preferedmods" - Automatic prefered mods not the right mods? Example: HDHR\n"maptype" - Do you prefer aim maps over stream maps? (speed, aim)\nMore settings coming soon! (Have some ideas? Msg Tiller)')
+            return
+
+        if setting == "preferedmods":
+            log.info("{} sent !settings preferedmods. Setting prefered mods to {}".format(message.author, value))
+            set.setSettings(message.author.id, "preferedmods", value)
+            await message.channel.send("Prefered mods set to {}".format(value))
+
+        if setting == "maptype":
+            log.info("{} sent !settings maptype. Setting maptype to {}".format(message.author, value))
+            set.setSettings(message.author.id, "maptype", value)
+            await message.channel.send("Maptype set to {}".format(value))
+
 
         
         
