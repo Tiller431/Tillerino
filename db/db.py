@@ -9,7 +9,7 @@ from beatmaps import calc
 def query(sql, *args):
     db = mysql.connector.connect(
     host="localhost",
-    user="osu",
+    user="root",
     passwd="osu",
     database="osu"
 )
@@ -29,7 +29,7 @@ def query(sql, *args):
 def queryOne(sql, *args):
     db = mysql.connector.connect(
     host="localhost",
-    user="osu",
+    user="root",
     passwd="osu",
     database="osu"
 )
@@ -51,7 +51,7 @@ def queryOne(sql, *args):
 def queryAll(sql, *args):
     db = mysql.connector.connect(
     host="localhost",
-    user="osu",
+    user="root",
     passwd="osu",
     database="osu"
 )
@@ -72,7 +72,7 @@ def queryAll(sql, *args):
 def queryMultiLn(sql, *args):
     db = mysql.connector.connect(
     host="localhost",
-    user="osu",
+    user="root",
     passwd="osu",
     database="osu"
 )
@@ -89,7 +89,7 @@ def queryMultiLn(sql, *args):
 
     
 def initDB():
-    sql = "CREATE TABLE IF NOT EXISTS users( userid INTEGER PRIMARY KEY, discordid BIGINT, username TEXT, current_pp FLOAT, topplay FLOAT, average_pp FLOAT);"
+    sql = "CREATE TABLE IF NOT EXISTS users( id INTEGER PRIMARY KEY, userid INT, discordid BIGINT, username TEXT, current_pp FLOAT, topplay FLOAT, average_pp FLOAT, mods INT);"
     log.debug("Creating users table.")
     query(sql)
     sql = "CREATE TABLE IF NOT EXISTS beatmaps( id INTEGER AUTO_INCREMENT, beatmapid INTEGER, beatmap_setid INTEGER, difficulty_name TEXT, stars REAL, mods TEXT, pp90 REAL, pp95 REAL, pp96 REAL, pp97 REAL, pp98 REAL, pp99 REAL, pp995 REAL, pp100 REAL, PRIMARY KEY (id));"
@@ -102,6 +102,10 @@ def initDB():
     #scores table (beatmapid, beatmap_setid, userid, scoreid, mods, pp, overwight_rank)
     sql = "CREATE TABLE IF NOT EXISTS scores( beatmapid INTEGER, beatmap_setid INTEGER, userid INTEGER, scoreid BIGINT, mods TEXT, pp FLOAT, overweight_rank INTEGER, PRIMARY KEY (scoreid));"
     log.debug("Creating scores table.")
+    query(sql)
+    #settings table (discordid, setting, value)
+    sql = "CREATE TABLE IF NOT EXISTS settings( discordid BIGINT, setting TEXT, value TEXT, PRIMARY KEY (discordid, setting));"
+    log.debug("Creating settings table.")
     query(sql)
 
 def getBeatmap(beatmapID):
@@ -118,6 +122,15 @@ def getUser(did):
     except:
         result = None
     return result
+
+def userExists(userid):
+    sql = "SELECT * FROM users WHERE userid = %s"
+    log.debug("Checking if user {} exists.".format(userid))
+    result = queryOne(sql, userid)
+    if result is None:
+        return False
+    else:
+        return True
 
 
 def deleteBeatmap(beatmapID):
@@ -152,8 +165,8 @@ def createUser(did, username):
 def updateUser(username):
     username = osu.getUserID(username)
     userid = osu.getUserID(username)
-    averageTop = osu.getAveragePPTOP(userid, 5)
-    currentTop = float(osu.getUserTop(userid, 1)[0]["pp"]) if osu.getUserTop(userid, 1)[0]["pp"] == 0 else averageTop
+    averageTop = osu.getAveragePPTOP(userid, 10)
+    currentTop = float(osu.getUserTop(userid, 1)[0]["pp"])
     totalPP = float(osu.getUser(userid)[0]["pp_raw"])
     mods = osu.getUserMods(userid)
     sql = "UPDATE users SET current_pp = %s, average_pp = %s, topplay = %s, mods = %s WHERE userid = %s"
@@ -243,26 +256,32 @@ def isScoreOW(scoreID):
     except:
         return False
 
-def getRandomOWmap(userID, mods=None):
+def getRandomOWmap(userID, mods=None, lower=0, upper=0):
     #randomly select a map from the database
-    lower, upper = getUserPPrange(userID)
-    mods = osu.getUserMods(userID)
+    if lower == 0 and upper == 0:
+        lower, upper = getUserPPrange(userID)
+        if lower is False and upper is False:
+            osu.getAveragePPTOP(userID, 10)
+    if mods == None:
+        mods = osu.getUserMods(userID)
 
-    sql = "SELECT * FROM overweighted WHERE average_pp >= %s AND average_pp <= %s AND (mods = %s OR mods = %s) AND overweight_score < 20"
+    sql = "SELECT * FROM overweighted WHERE average_pp >= %s AND average_pp <= %s AND (mods = %s OR mods = %s) AND overweight_score < 15"
     log.info("Getting random map between {} and {}".format(upper, lower, mods, 0))
+    #add a check for hidden too to allow for more results
     result = queryAll(sql, lower, upper, mods, mods + m.mods.HIDDEN)
 
-    if len(result) == 0:
-        sql = "SELECT * FROM overweighted WHERE average_pp >= %s AND average_pp <= %s"
-        log.info("Getting random map between {}pp and {}pp for user {}.".format(lower, upper, userID))
+    if result is None or len(result) == 0:
+        sql = "SELECT * FROM overweighted WHERE average_pp >= %s AND average_pp <= %s AND (mods = %s OR mods = %s)"
+        log.info("Getting random map between {}pp and {}pp for user {}.".format(lower, upper, userID, mods))
         result = queryAll(sql, lower, upper)
-        if len(result) == 0:
-            return None, None, None
+        if result is None or len(result) == 0:
+            return None, None, 0
     log.debug("Got {} possible maps.".format(len(result)))
     #id INTEGER AUTO_INCREMENT, beatmapid INTEGER, beatmap_setid INTEGER, mods BIGINT, topplays INTEGER, average_pp REAL, overweight_score REAL
     mapNum = random.randint(0, len(result)-1)
     map = result[mapNum][1]
-    mods = result[mapNum][3]
+    #remove hidden if not supplied in mods
+    mods = result[mapNum][3] - m.mods.HIDDEN if m.mods.HIDDEN & mods > 0 else result[mapNum][3]
     log.debug("Sending map {}.".format(map))
     return map, mods, len(result)
 
@@ -270,9 +289,9 @@ def getUserPPrange(userID):
     sql = "SELECT * FROM users WHERE userid = %s"
     result = queryOne(sql, userID)
     if result is None:
-        return False
+        return False, False
     else:
-        return result[5] - 25 if result[5] > 25 else 0, result[5] + 25
+        return result[5] - 10 if result[5] > 25 else 0, result[5] + 10
 
 def getAllScores():
     sql = "SELECT * FROM scores"
@@ -311,7 +330,7 @@ def getPP(beatmapID, mods):
     result = queryOne(sql, beatmapID, m.readableMods(mods))
     log.debug("Got {}".format(result))
     if result is None:
-        calc.calcPP(beatmapID)
+        calc.calcPP(beatmapID, mods)
         result = queryOne(sql, beatmapID, m.readableMods(mods))
     out = []
     for i in range(6, 14):

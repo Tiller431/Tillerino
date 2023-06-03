@@ -7,6 +7,7 @@ load_dotenv()
 
 debugConf = True if os.getenv("DEBUG").lower() == "true" else False
 printDB = True if os.getenv("DEBUGDB").lower() == "true" else False
+printAPI = True if os.getenv("DEBUGAPI").lower() == "true" else False
 
 class Color:
     #console colors
@@ -32,10 +33,16 @@ def error(msg):
 
 def debug(msg):
     #time - [DEBUG] - msg
-    if debugConf:
+    debug = True
+    if debug:
         print(Color.MAGENTA + "{} - [DEBUG] - {}".format(time.strftime("%H:%M:%S"), msg) + Color.RESET)
 
 def db(msg):
     #time - [DB] - msg
     if printDB:
         print(Color.DARKGREY + "{} - [DB] - {}".format(time.strftime("%H:%M:%S"), msg) + Color.RESET)
+
+def api(msg):
+    #time - [API] - msg
+    if printAPI:
+        print(Color.GREEN + "{} - [API] - {}".format(time.strftime("%H:%M:%S"), msg) + Color.RESET)

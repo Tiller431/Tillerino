@@ -60,21 +60,46 @@ def modsToEnum(r):
     m = 0
     r = r.upper()
     if r.find("NF") > -1:
-        m += mods.NOFAIL
+        m |= mods.NOFAIL
     if r.find("EZ") > -1:
-        m += mods.EASY
+        m |= mods.EASY
     if r.find("HD") > -1:
-        m += mods.HIDDEN
+        m |= mods.HIDDEN
     if r.find("HR") > -1:
-        m += mods.HARDROCK
+        m |= mods.HARDROCK
     if r.find("DT") > -1:
-        m += mods.DOUBLETIME
+        m |= mods.DOUBLETIME
     if r.find("HT") > -1:
-        m += mods.HALFTIME
+        m |= mods.HALFTIME
     if r.find("FL") > -1:
-        m += mods.FLASHLIGHT
+        m |= mods.FLASHLIGHT
     if r.find("SO") > -1:
-        m += mods.SPUNOUT
+        m |= mods.SPUNOUT
     if r.find("TD") > -1:
-        m += mods.TOUCHSCREEN
+        m |= mods.TOUCHSCREEN
+    return m
+
+
+def fullModsToEnum(str):
+    m = 0
+    str = str.upper()
+    if str.find("NOFAIL") > -1:
+        m |= mods.NOFAIL
+    if str.find("EASY") > -1:
+        m |= mods.EASY
+    if str.find("HIDDEN") > -1:
+        m |= mods.HIDDEN
+    if str.find("HARDROCK") > -1:
+        m |= mods.HARDROCK
+    if str.find("DOUBLETIME") > -1:
+        m |= mods.DOUBLETIME
+    if str.find("HALFTIME") > -1:
+        m |= mods.HALFTIME
+    if str.find("FLASHLIGHT") > -1:
+        m |= mods.FLASHLIGHT
+    if str.find("SPUNOUT") > -1:
+        m |= mods.SPUNOUT
+    if str.find("TOUCHSCREEN") > -1:
+        m |= mods.TOUCHSCREEN
+
     return m

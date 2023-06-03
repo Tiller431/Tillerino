@@ -1,5 +1,6 @@
 import os
 import json
+from beatmaps import mods as m
 from api import osu
 from db import db
 from logger import log
@@ -13,6 +14,7 @@ calcMods.append("DT")
 calcMods.append("HR")
 calcMods.append("HDHR")
 calcMods.append("HDDT")
+calcMods.append("HDDTHR")
 
 calcAcc = []
 calcAcc.append("90")
@@ -27,37 +29,39 @@ calcAcc.append("100")
 
 
 
-def calcPP(beatmapid):
+def calcPP(beatmapid, mods):
     beatmapid = str(beatmapid)
+    mods = m.readableMods(mods)
+
     osu.getOsu(beatmapid)
     ret = ""
     #oppai pathtoosu -ojson acc% +mods
-    for mods in calcMods:
-        final = []
-        final.append(mods)
-        if db.isMapInDB(beatmapid, mods):
-            continue
-        for acc in calcAcc:
-            if mods != "NOMOD":
-                #run "oppai pathtoosu -ojson acc%" and get the json
-                log.debug("Calculating PP for {} with {}% accuracy and {} mods".format(beatmapid, acc, mods))
-                output = os.popen("oppai " + cachePath + beatmapid + ".osu" + " -ojson " + acc + "% " + "+" + mods).read()
-            else:
-                log.debug("Calculating PP for {} with {}% accuracy and no mods".format(beatmapid, acc))
-                output = os.popen("oppai " + cachePath + beatmapid + ".osu" + " -ojson " + acc + "%").read()
+    final = []
+    final.append(mods)
 
-            #parse the json
-            output = json.loads(output)
-            #get the pp
-            pp = round(output["pp"], 2)
-            #print the pp
-            log.debug(beatmapid + " " + acc + "% +" + mods + ": " + str(pp))
-            final.append(pp)
-        #save the pp to the database
-        formatted = "+**{}**: **90%**:{} **95%**:{} **96%**:{} **97%**:{} **98%**:{} **99%**:{} **99.5%**:{} **100%**:{}\n".format(mods, final[1], final[2], final[3], final[4], final[5], final[6], final[7], final[8])
-        ret += formatted
-        db.saveBeatmapData(beatmapid, round(output["stars"], 4), mods, final[1], final[2], final[3], final[4], final[5], final[6], final[7], final[8])
-    return ret
+    for acc in calcAcc:
+        if mods != "NOMOD":
+            #run "oppai pathtoosu -ojson acc%" and get the json
+            log.debug("Calculating PP for {} with {}% accuracy and {} mods".format(beatmapid, acc, mods))
+            output = os.popen("oppai " + cachePath + beatmapid + ".osu" + " -ojson " + acc + "% " + "+" + mods).read()
+        else:
+            log.debug("Calculating PP for {} with {}% accuracy and no mods".format(beatmapid, acc))
+            output = os.popen("oppai " + cachePath + beatmapid + ".osu" + " -ojson " + acc + "%").read()
+
+        #parse the json
+        output = json.loads(output)
+        #get the pp
+        pp = round(output["pp"], 2)
+        #print the pp
+        log.debug(beatmapid + " " + acc + "% +" + mods + ": " + str(pp))
+        final.append(pp)
+    #save the pp to the database
+    formatted = "+**{}**: **90%**:{} **95%**:{} **96%**:{} **97%**:{} **98%**:{} **99%**:{} **99.5%**:{} **100%**:{}\n".format(mods, final[1], final[2], final[3], final[4], final[5], final[6], final[7], final[8])
+    ret += formatted
+    if db.isMapInDB(beatmapid, mods):
+        return output
+    db.saveBeatmapData(beatmapid, round(output["stars"], 4), mods, final[1], final[2], final[3], final[4], final[5], final[6], final[7], final[8])
+    return output
 
 
 def calcUserTop(userid, limit=25):
@@ -81,7 +85,7 @@ def calcACC(num300, num100, num50, nummiss):
 def calcPlay(mapID, mods, end=0, combo=0, acc=100, one=0, fif=0, misses=0):
     cmd = "{} {}{}.osu -ojson".format(oppaiPath, cachePath, mapID)
     osu.getOsu(mapID)
-    if osu.getBeatmap(mapID) is False:
+    if os.path.exists("cache/{}.osu".format(mapID)) is False:
         return 0
     if mods != "nomod":
         cmd += " +{}".format(mods)
@@ -105,3 +109,4 @@ def calcAll(beatmapsetid):
     log.debug("Calculating PP for all maps in beatmapset: {}".format(beatmapsetid))
     for beatmap in beatmaps:
         calcPP(beatmap["beatmap_id"])
+
